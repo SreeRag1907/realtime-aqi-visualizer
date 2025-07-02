@@ -20,7 +20,7 @@ import {
   Globe,
   Activity,
 } from 'lucide-react-native';
-import InteractiveHeatMap from '@/components/InteractiveHeatMap';
+import SimpleGoogleMap from '@/components/SimpleGoogleMap';
 import { aqiDataService, AQIStation } from '@/services/aqiDataService';
 
 export default function MapScreen() {
@@ -191,10 +191,7 @@ export default function MapScreen() {
       </LinearGradient>
 
       <View style={styles.mapWrapper}>
-        <InteractiveHeatMap
-          selectedLayer={selectedLayer}
-          onLocationSelect={setSelectedLocation}
-        />
+        <SimpleGoogleMap />
       </View>
 
       {selectedLocation && (
