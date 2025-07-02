@@ -140,7 +140,7 @@ export default function MapScreen() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Live AQI Heat Map</Text>
-            <Text style={styles.headerSubtitle}>ISRO Satellite & CPCB Ground Network</Text>
+            <Text style={styles.headerSubtitle}>OpenWeatherMap Global Air Quality Network</Text>
           </View>
           <RealTimeIndicator />
         </View>

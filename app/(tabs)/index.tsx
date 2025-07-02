@@ -7,45 +7,81 @@ import {
   Dimensions,
   TouchableOpacity,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Wind, Eye, Thermometer, Droplets, Shield, TriangleAlert as AlertTriangle, Heart, Leaf, Satellite, Activity, TrendingUp, TrendingDown } from 'lucide-react-native';
+import { MapPin, Wind, Eye, Thermometer, Droplets, Shield, TriangleAlert as AlertTriangle, Heart, Leaf, Satellite, Activity, TrendingUp, TrendingDown, ChevronDown } from 'lucide-react-native';
 import { aqiDataService, AQIStation, WeatherData } from '@/services/aqiDataService';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const [currentStation, setCurrentStation] = useState<AQIStation | null>(null);
+  const [allStations, setAllStations] = useState<AQIStation[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [location, setLocation] = useState('New Delhi, India');
+  const [selectedCity, setSelectedCity] = useState('Delhi');
+  const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [trend, setTrend] = useState<'up' | 'down' | 'stable'>('stable');
+
+  const availableCities = [
+    { name: 'Delhi', coordinates: { lat: 28.6139, lng: 77.2090 } },
+    { name: 'Mumbai', coordinates: { lat: 19.0760, lng: 72.8777 } },
+    { name: 'Pune', coordinates: { lat: 18.5204, lng: 73.8567 } },
+    { name: 'Chennai', coordinates: { lat: 13.0827, lng: 80.2707 } },
+  ];
 
   useEffect(() => {
     loadInitialData();
     setupRealTimeUpdates();
   }, []);
 
+  useEffect(() => {
+    if (allStations.length > 0) {
+      // Update current station when city selection changes
+      const selectedStation = allStations.find(s => 
+        s.name.toLowerCase().includes(selectedCity.toLowerCase())
+      ) || allStations[0];
+      setCurrentStation(selectedStation);
+      
+      // Load weather data for the new city
+      const cityCoords = availableCities.find(city => city.name === selectedCity)?.coordinates;
+      if (cityCoords) {
+        aqiDataService.fetchWeatherData(cityCoords.lat, cityCoords.lng)
+          .then(setWeather)
+          .catch(console.error);
+      }
+    }
+  }, [selectedCity, allStations]);
+
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
       const [stations, weatherData] = await Promise.all([
         aqiDataService.fetchRealTimeAQI(),
-        aqiDataService.fetchWeatherData(28.6139, 77.2090),
+        aqiDataService.fetchWeatherData(
+          availableCities.find(city => city.name === selectedCity)?.coordinates.lat || 28.6139,
+          availableCities.find(city => city.name === selectedCity)?.coordinates.lng || 77.2090
+        ),
       ]);
       
-      // Get the station closest to Delhi (or first station)
-      const delhiStation = stations.find(s => s.name.toLowerCase().includes('delhi')) || stations[0];
-      setCurrentStation(delhiStation);
+      setAllStations(stations);
+      
+      // Get the station for the selected city
+      const selectedStation = stations.find(s => 
+        s.name.toLowerCase().includes(selectedCity.toLowerCase())
+      ) || stations[0];
+      
+      setCurrentStation(selectedStation);
       setWeather(weatherData);
       setLastUpdated(new Date());
       
       // Calculate trend (mock calculation)
-      const previousAQI = delhiStation?.aqi - Math.floor(Math.random() * 20 - 10);
-      if (delhiStation && previousAQI) {
-        if (delhiStation.aqi > previousAQI + 5) setTrend('up');
-        else if (delhiStation.aqi < previousAQI - 5) setTrend('down');
+      const previousAQI = selectedStation?.aqi - Math.floor(Math.random() * 20 - 10);
+      if (selectedStation && previousAQI) {
+        if (selectedStation.aqi > previousAQI + 5) setTrend('up');
+        else if (selectedStation.aqi < previousAQI - 5) setTrend('down');
         else setTrend('stable');
       }
     } catch (error) {
@@ -57,8 +93,11 @@ export default function HomeScreen() {
 
   const setupRealTimeUpdates = () => {
     return aqiDataService.setupRealTimeUpdates((newData) => {
-      const delhiStation = newData.find(s => s.name.toLowerCase().includes('delhi')) || newData[0];
-      setCurrentStation(delhiStation);
+      setAllStations(newData);
+      const selectedStation = newData.find(s => 
+        s.name.toLowerCase().includes(selectedCity.toLowerCase())
+      ) || newData[0];
+      setCurrentStation(selectedStation);
       setLastUpdated(new Date());
     });
   };
@@ -71,6 +110,62 @@ export default function HomeScreen() {
     if (aqi <= 300) return { status: 'Very Unhealthy', color: '#8B5CF6', bg: '#5B21B6' };
     return { status: 'Hazardous', color: '#7C2D12', bg: '#451A03' };
   };
+
+  const CitySelector = () => (
+    <View style={styles.citySelectorContainer}>
+      <TouchableOpacity 
+        style={styles.citySelector}
+        onPress={() => setShowDropdown(true)}
+      >
+        <MapPin size={18} color="#94A3B8" />
+        <Text style={styles.cityText}>{selectedCity}, India</Text>
+        <ChevronDown size={16} color="#94A3B8" />
+      </TouchableOpacity>
+      
+      <Modal
+        visible={showDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDropdown(false)}
+        >
+          <View style={styles.dropdownContainer}>
+            <LinearGradient
+              colors={['#1E293B', '#334155']}
+              style={styles.dropdown}
+            >
+              <Text style={styles.dropdownTitle}>Select City</Text>
+              {availableCities.map((city) => (
+                <TouchableOpacity
+                  key={city.name}
+                  style={[
+                    styles.dropdownItem,
+                    selectedCity === city.name && styles.selectedDropdownItem
+                  ]}
+                  onPress={() => {
+                    setSelectedCity(city.name);
+                    setShowDropdown(false);
+                  }}
+                >
+                  <MapPin size={16} color={selectedCity === city.name ? "#7C3AED" : "#94A3B8"} />
+                  <Text style={[
+                    styles.dropdownItemText,
+                    selectedCity === city.name && styles.selectedDropdownItemText
+                  ]}>
+                    {city.name}, India
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </LinearGradient>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
 
   const aqiStatus = currentStation ? getAQIStatus(currentStation.aqi) : null;
 
@@ -140,7 +235,7 @@ export default function HomeScreen() {
         >
           <Activity size={32} color="#7C3AED" />
           <Text style={styles.loadingText}>Loading real-time data...</Text>
-          <Text style={styles.loadingSubtext}>Connecting to ISRO satellites & CPCB stations</Text>
+          <Text style={styles.loadingSubtext}>Connecting to OpenWeatherMap API</Text>
         </LinearGradient>
       </View>
     );
@@ -163,27 +258,24 @@ export default function HomeScreen() {
         style={styles.header}
       >
         <View style={styles.headerTop}>
-          <View style={styles.locationContainer}>
-            <MapPin size={18} color="#94A3B8" />
-            <Text style={styles.locationText}>{location}</Text>
-          </View>
+          <CitySelector />
           <LiveDataIndicator />
         </View>
         
         <View style={styles.aqiContainer}>
           <LinearGradient
-            colors={[aqiStatus.bg, aqiStatus.color + '20']}
+            colors={aqiStatus ? [aqiStatus.bg, aqiStatus.color + '20'] : ['#1E293B', '#334155']}
             style={styles.aqiCard}
           >
             <View style={styles.aqiHeader}>
               <Text style={styles.aqiLabel}>Air Quality Index</Text>
               <TrendIndicator />
             </View>
-            <Text style={[styles.aqiValue, { color: aqiStatus.color }]}>
-              {currentStation.aqi}
+            <Text style={[styles.aqiValue, { color: aqiStatus?.color || '#E2E8F0' }]}>
+              {currentStation?.aqi || '--'}
             </Text>
-            <Text style={[styles.aqiStatus, { color: aqiStatus.color }]}>
-              {aqiStatus.status}
+            <Text style={[styles.aqiStatus, { color: aqiStatus?.color || '#E2E8F0' }]}>
+              {aqiStatus?.status || 'Loading...'}
             </Text>
             <Text style={styles.lastUpdatedText}>
               Updated: {lastUpdated.toLocaleTimeString()}
@@ -214,7 +306,7 @@ export default function HomeScreen() {
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Real-time Pollutant Levels</Text>
-          <Text style={styles.sectionSubtitle}>CPCB Ground Station Data</Text>
+          <Text style={styles.sectionSubtitle}>OpenWeatherMap Air Quality Data</Text>
         </View>
         
         <View style={styles.pollutantsGrid}>
@@ -278,10 +370,10 @@ export default function HomeScreen() {
             <Text style={styles.dataSourceTitle}>Data Sources</Text>
           </View>
           <Text style={styles.dataSourceText}>
-            • ISRO Satellite Imagery & Analysis{'\n'}
-            • CPCB Real-time Ground Stations{'\n'}
-            • IMD Meteorological Data{'\n'}
-            • AI-powered Predictive Models
+            • OpenWeatherMap Air Pollution API{'\n'}
+            • Real-time Global Air Quality Data{'\n'}
+            • Meteorological & Weather Information{'\n'}
+            • Multi-city AQI Monitoring
           </Text>
         </LinearGradient>
 
@@ -344,6 +436,70 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 8,
+  },
+  citySelectorContainer: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  citySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cityText: {
+    color: '#E2E8F0',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownContainer: {
+    width: width * 0.8,
+    maxWidth: 300,
+  },
+  dropdown: {
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  dropdownTitle: {
+    color: '#E2E8F0',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  selectedDropdownItem: {
+    backgroundColor: '#7C3AED20',
+  },
+  dropdownItemText: {
+    color: '#E2E8F0',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  selectedDropdownItemText: {
+    color: '#7C3AED',
+    fontWeight: '600',
   },
   liveIndicator: {
     flexDirection: 'row',

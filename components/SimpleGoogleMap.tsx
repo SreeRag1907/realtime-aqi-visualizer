@@ -5,6 +5,7 @@ import {
   Dimensions,
   TouchableOpacity,
   Text,
+  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,6 +30,8 @@ export default function SimpleGoogleMap({
   const [stations, setStations] = useState<AQIStation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [showNotification, setShowNotification] = useState(false);
+  const refreshAnimation = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     if (showAQIData) {
@@ -36,12 +39,23 @@ export default function SimpleGoogleMap({
     }
   }, [showAQIData]);
 
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 2000); // Hide after 2 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
   const loadAQIData = async () => {
     setIsLoading(true);
     try {
       const aqiData = await aqiDataService.fetchRealTimeAQI();
       setStations(aqiData);
       setLastUpdated(new Date());
+      setShowNotification(true); // Show notification when data updates
     } catch (error) {
       console.error('Error loading AQI data:', error);
     } finally {
@@ -184,15 +198,37 @@ export default function SimpleGoogleMap({
             // Add AQI markers for Indian cities
             const aqiStations = ${JSON.stringify(stations)};
             
+            // Function to get AQI color
+            function getAQIColor(aqi) {
+              if (aqi <= 50) return '#10B981';
+              if (aqi <= 100) return '#F59E0B';
+              if (aqi <= 150) return '#F97316';
+              if (aqi <= 200) return '#EF4444';
+              if (aqi <= 300) return '#8B5CF6';
+              return '#7C2D12';
+            }
+            
+            function getAQIStatus(aqi) {
+              if (aqi <= 50) return 'Good';
+              if (aqi <= 100) return 'Moderate';
+              if (aqi <= 150) return 'Unhealthy for Sensitive';
+              if (aqi <= 200) return 'Unhealthy';
+              if (aqi <= 300) return 'Very Unhealthy';
+              return 'Hazardous';
+            }
+            
             aqiStations.forEach(station => {
+              const aqiColor = getAQIColor(station.aqi);
+              const aqiStatus = getAQIStatus(station.aqi);
+              
               const marker = new google.maps.Marker({
                 position: { lat: station.latitude, lng: station.longitude },
                 map: map,
                 title: station.name,
                 icon: {
                   path: google.maps.SymbolPath.CIRCLE,
-                  scale: Math.max(8, Math.min(20, station.aqi / 10)),
-                  fillColor: "${stations.length > 0 ? '#7C3AED' : '#7C3AED'}",
+                  scale: 12, // Consistent size for all markers
+                  fillColor: aqiColor,
                   fillOpacity: 0.9,
                   strokeWeight: 2,
                   strokeColor: "#FFFFFF"
@@ -201,19 +237,29 @@ export default function SimpleGoogleMap({
 
               const infoWindow = new google.maps.InfoWindow({
                 content: \`
-                  <div style="color: #000; padding: 10px; min-width: 200px;">
-                    <h3 style="margin: 0 0 8px 0; color: #7C3AED;">\${station.name}</h3>
-                    <div style="display: flex; gap: 10px; margin-bottom: 5px;">
-                      <span style="font-weight: bold; color: \${station.aqi <= 50 ? '#10B981' : station.aqi <= 100 ? '#F59E0B' : station.aqi <= 150 ? '#F97316' : station.aqi <= 200 ? '#EF4444' : '#8B5CF6'};">AQI: \${station.aqi}</span>
-                      <span style="font-size: 12px; color: #666;">(\${station.status.replace('_', ' ').toUpperCase()})</span>
+                  <div style="color: #000; padding: 12px; min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <h3 style="margin: 0 0 10px 0; color: #7C3AED; font-size: 16px; font-weight: bold;">\${station.name}</h3>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
+                      <div style="width: 16px; height: 16px; border-radius: 50%; background: \${aqiColor};"></div>
+                      <span style="font-weight: bold; color: \${aqiColor}; font-size: 18px;">AQI: \${station.aqi}</span>
+                      <span style="font-size: 12px; color: #666; font-weight: 500;">(\${aqiStatus})</span>
                     </div>
-                    <div style="font-size: 12px; color: #333; line-height: 1.4;">
-                      <div>PM2.5: \${station.pm25.toFixed(1)} μg/m³</div>
-                      <div>PM10: \${station.pm10.toFixed(1)} μg/m³</div>
-                      <div>NO₂: \${station.no2.toFixed(1)} μg/m³</div>
+                    <div style="font-size: 13px; color: #333; line-height: 1.5; margin-bottom: 8px;">
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span><strong>PM2.5:</strong> \${station.pm25.toFixed(1)} μg/m³</span>
+                        <span><strong>PM10:</strong> \${station.pm10.toFixed(1)} μg/m³</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span><strong>NO₂:</strong> \${station.no2.toFixed(1)} μg/m³</span>
+                        <span><strong>SO₂:</strong> \${station.so2.toFixed(1)} μg/m³</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between;">
+                        <span><strong>CO:</strong> \${station.co.toFixed(1)} mg/m³</span>
+                        <span><strong>O₃:</strong> \${station.o3.toFixed(1)} μg/m³</span>
+                      </div>
                     </div>
-                    <div style="font-size: 10px; color: #666; margin-top: 5px;">
-                      Updated: \${new Date(station.lastUpdated).toLocaleTimeString()}
+                    <div style="font-size: 11px; color: #666; text-align: center; padding-top: 8px; border-top: 1px solid #eee;">
+                      Last Updated: \${new Date(station.lastUpdated).toLocaleString()}
                     </div>
                   </div>
                 \`
@@ -231,7 +277,7 @@ export default function SimpleGoogleMap({
               title: "Delhi, India",
               icon: {
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 10,
+                scale: 12, // Same consistent size
                 fillColor: "#7C3AED",
                 fillOpacity: 0.9,
                 strokeWeight: 2,
@@ -299,11 +345,61 @@ export default function SimpleGoogleMap({
         {showAQIData ? 'Real-time AQI data from OpenWeatherMap' : 'Interactive Google Maps view'}
       </Text>
       {showAQIData && (
-        <Text style={styles.infoTimestamp}>
-          Updated: {lastUpdated.toLocaleTimeString()}
-        </Text>
+        <View style={styles.infoDetails}>
+          <Text style={styles.infoTimestamp}>
+            Updated: {lastUpdated.toLocaleTimeString()}
+          </Text>
+          <Text style={styles.stationCount}>
+            {stations.length} monitoring stations
+          </Text>
+        </View>
       )}
     </LinearGradient>
+  );
+
+  const UpdateNotification = () => {
+    if (!showNotification || !showAQIData) return null;
+    
+    return (
+      <LinearGradient
+        colors={['#10B981', '#059669']}
+        style={styles.notification}
+      >
+        <View style={styles.notificationContent}>
+          <RefreshCw size={16} color="#FFFFFF" />
+          <Text style={styles.notificationText}>Data Updated Successfully</Text>
+        </View>
+      </LinearGradient>
+    );
+  };
+
+  const Legend = () => (
+    <View style={styles.legend}>
+      <LinearGradient
+        colors={['#1E293B', '#334155']}
+        style={styles.legendContainer}
+      >
+        <Text style={styles.legendTitle}>AQI Scale</Text>
+        <View style={styles.legendItems}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#10B981' }]} />
+            <Text style={styles.legendText}>Good</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#F59E0B' }]} />
+            <Text style={styles.legendText}>Moderate</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#F97316' }]} />
+            <Text style={styles.legendText}>Unhealthy</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#EF4444' }]} />
+            <Text style={styles.legendText}>Very Unhealthy</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </View>
   );
 
   return (
@@ -330,8 +426,10 @@ export default function SimpleGoogleMap({
         }}
       />
       
+      <UpdateNotification />
       <MapControls />
       <MapInfo />
+      {showAQIData && <Legend />}
     </View>
   );
 }
@@ -396,10 +494,81 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
   },
+  infoDetails: {
+    marginTop: 4,
+    gap: 2,
+  },
   infoTimestamp: {
     color: '#7C3AED',
     fontSize: 10,
     fontWeight: '500',
-    marginTop: 2,
+  },
+  stationCount: {
+    color: '#94A3B8',
+    fontSize: 10,
+  },
+  notification: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  notificationText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  legend: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
+  legendContainer: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  legendTitle: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  legendItems: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 8,
+  },
+  legendItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  legendText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    textAlign: 'center',
   },
 });
