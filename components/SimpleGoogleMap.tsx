@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Target, Info } from 'lucide-react-native';
+import { Target, Info, RefreshCw } from 'lucide-react-native';
+import { aqiDataService, AQIStation } from '@/services/aqiDataService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -16,13 +17,46 @@ interface SimpleGoogleMapProps {
   apiKey?: string;
   center?: { lat: number; lng: number };
   zoom?: number;
+  showAQIData?: boolean;
 }
 
 export default function SimpleGoogleMap({ 
   apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY',
   center = { lat: 28.6139, lng: 77.2090 }, // Delhi, India
-  zoom = 10 
+  zoom = 6, // Wider view to see multiple cities
+  showAQIData = true
 }: SimpleGoogleMapProps) {
+  const [stations, setStations] = useState<AQIStation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  useEffect(() => {
+    if (showAQIData) {
+      loadAQIData();
+    }
+  }, [showAQIData]);
+
+  const loadAQIData = async () => {
+    setIsLoading(true);
+    try {
+      const aqiData = await aqiDataService.fetchRealTimeAQI();
+      setStations(aqiData);
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error loading AQI data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getAQIColor = (aqi: number) => {
+    if (aqi <= 50) return '#10B981';
+    if (aqi <= 100) return '#F59E0B';
+    if (aqi <= 150) return '#F97316';
+    if (aqi <= 200) return '#EF4444';
+    if (aqi <= 300) return '#8B5CF6';
+    return '#7C2D12';
+  };
 
   const googleMapsHTML = `
     <!DOCTYPE html>
@@ -146,7 +180,51 @@ export default function SimpleGoogleMap({
               ]
             });
             
-            // Add a marker for the center location
+            ${showAQIData ? `
+            // Add AQI markers for Indian cities
+            const aqiStations = ${JSON.stringify(stations)};
+            
+            aqiStations.forEach(station => {
+              const marker = new google.maps.Marker({
+                position: { lat: station.latitude, lng: station.longitude },
+                map: map,
+                title: station.name,
+                icon: {
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: Math.max(8, Math.min(20, station.aqi / 10)),
+                  fillColor: "${stations.length > 0 ? '#7C3AED' : '#7C3AED'}",
+                  fillOpacity: 0.9,
+                  strokeWeight: 2,
+                  strokeColor: "#FFFFFF"
+                }
+              });
+
+              const infoWindow = new google.maps.InfoWindow({
+                content: \`
+                  <div style="color: #000; padding: 10px; min-width: 200px;">
+                    <h3 style="margin: 0 0 8px 0; color: #7C3AED;">\${station.name}</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+                      <span style="font-weight: bold; color: \${station.aqi <= 50 ? '#10B981' : station.aqi <= 100 ? '#F59E0B' : station.aqi <= 150 ? '#F97316' : station.aqi <= 200 ? '#EF4444' : '#8B5CF6'};">AQI: \${station.aqi}</span>
+                      <span style="font-size: 12px; color: #666;">(\${station.status.replace('_', ' ').toUpperCase()})</span>
+                    </div>
+                    <div style="font-size: 12px; color: #333; line-height: 1.4;">
+                      <div>PM2.5: \${station.pm25.toFixed(1)} μg/m³</div>
+                      <div>PM10: \${station.pm10.toFixed(1)} μg/m³</div>
+                      <div>NO₂: \${station.no2.toFixed(1)} μg/m³</div>
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-top: 5px;">
+                      Updated: \${new Date(station.lastUpdated).toLocaleTimeString()}
+                    </div>
+                  </div>
+                \`
+              });
+
+              marker.addListener("click", () => {
+                infoWindow.open(map, marker);
+              });
+            });
+            ` : `
+            // Add a default marker for Delhi
             const marker = new google.maps.Marker({
               position: mapCenter,
               map: map,
@@ -161,7 +239,6 @@ export default function SimpleGoogleMap({
               }
             });
 
-            // Add info window
             const infoWindow = new google.maps.InfoWindow({
               content: \`
                 <div style="color: #000; padding: 10px;">
@@ -174,6 +251,7 @@ export default function SimpleGoogleMap({
             marker.addListener("click", () => {
               infoWindow.open(map, marker);
             });
+            `}
           }
           
           function onError() {
@@ -193,6 +271,15 @@ export default function SimpleGoogleMap({
 
   const MapControls = () => (
     <View style={styles.mapControls}>
+      {showAQIData && (
+        <TouchableOpacity 
+          style={[styles.controlButton, isLoading && styles.loadingButton]} 
+          onPress={loadAQIData}
+          disabled={isLoading}
+        >
+          <RefreshCw size={20} color={isLoading ? "#7C3AED" : "#FFFFFF"} />
+        </TouchableOpacity>
+      )}
       <TouchableOpacity style={styles.controlButton}>
         <Target size={20} color="#FFFFFF" />
       </TouchableOpacity>
@@ -206,11 +293,16 @@ export default function SimpleGoogleMap({
     >
       <View style={styles.infoHeader}>
         <Info size={16} color="#7C3AED" />
-        <Text style={styles.infoTitle}>Google Maps</Text>
+        <Text style={styles.infoTitle}>Air Quality Map</Text>
       </View>
       <Text style={styles.infoText}>
-        Interactive map view of Delhi, India
+        {showAQIData ? 'Real-time AQI data from OpenWeatherMap' : 'Interactive Google Maps view'}
       </Text>
+      {showAQIData && (
+        <Text style={styles.infoTimestamp}>
+          Updated: {lastUpdated.toLocaleTimeString()}
+        </Text>
+      )}
     </LinearGradient>
   );
 
@@ -271,6 +363,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
+  loadingButton: {
+    backgroundColor: '#475569',
+  },
   mapInfo: {
     position: 'absolute',
     top: 60,
@@ -300,5 +395,11 @@ const styles = StyleSheet.create({
   infoText: {
     color: '#94A3B8',
     fontSize: 12,
+  },
+  infoTimestamp: {
+    color: '#7C3AED',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });
