@@ -19,13 +19,15 @@ interface SimpleGoogleMapProps {
   center?: { lat: number; lng: number };
   zoom?: number;
   showAQIData?: boolean;
+  onMarkerClick?: (station: AQIStation) => void;
 }
 
 export default function SimpleGoogleMap({ 
   apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY',
-  center = { lat: 28.6139, lng: 77.2090 }, // Delhi, India
-  zoom = 6, // Wider view to see multiple cities
-  showAQIData = true
+  center = { lat: 23.5937, lng: 78.9629 }, // Center of India to show rural areas better
+  zoom = 5, // Wider view to show entire India including rural areas
+  showAQIData = true,
+  onMarkerClick
 }: SimpleGoogleMapProps) {
   const [stations, setStations] = useState<AQIStation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -235,38 +237,14 @@ export default function SimpleGoogleMap({
                 }
               });
 
-              const infoWindow = new google.maps.InfoWindow({
-                content: \`
-                  <div style="color: #000; padding: 12px; min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                    <h3 style="margin: 0 0 10px 0; color: #7C3AED; font-size: 16px; font-weight: bold;">\${station.name}</h3>
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
-                      <div style="width: 16px; height: 16px; border-radius: 50%; background: \${aqiColor};"></div>
-                      <span style="font-weight: bold; color: \${aqiColor}; font-size: 18px;">AQI: \${station.aqi}</span>
-                      <span style="font-size: 12px; color: #666; font-weight: 500;">(\${aqiStatus})</span>
-                    </div>
-                    <div style="font-size: 13px; color: #333; line-height: 1.5; margin-bottom: 8px;">
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span><strong>PM2.5:</strong> \${station.pm25.toFixed(1)} μg/m³</span>
-                        <span><strong>PM10:</strong> \${station.pm10.toFixed(1)} μg/m³</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span><strong>NO₂:</strong> \${station.no2.toFixed(1)} μg/m³</span>
-                        <span><strong>SO₂:</strong> \${station.so2.toFixed(1)} μg/m³</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between;">
-                        <span><strong>CO:</strong> \${station.co.toFixed(1)} mg/m³</span>
-                        <span><strong>O₃:</strong> \${station.o3.toFixed(1)} μg/m³</span>
-                      </div>
-                    </div>
-                    <div style="font-size: 11px; color: #666; text-align: center; padding-top: 8px; border-top: 1px solid #eee;">
-                      Last Updated: \${new Date(station.lastUpdated).toLocaleString()}
-                    </div>
-                  </div>
-                \`
-              });
-
               marker.addListener("click", () => {
-                infoWindow.open(map, marker);
+                // Send station data to React Native
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'markerClick',
+                    station: station
+                  }));
+                }
               });
             });
             ` : `
@@ -332,31 +310,6 @@ export default function SimpleGoogleMap({
     </View>
   );
 
-  const MapInfo = () => (
-    <LinearGradient
-      colors={['#1E293B', '#334155']}
-      style={styles.mapInfo}
-    >
-      <View style={styles.infoHeader}>
-        <Info size={16} color="#7C3AED" />
-        <Text style={styles.infoTitle}>Air Quality Map</Text>
-      </View>
-      <Text style={styles.infoText}>
-        {showAQIData ? 'Real-time AQI data from OpenWeatherMap' : 'Interactive Google Maps view'}
-      </Text>
-      {showAQIData && (
-        <View style={styles.infoDetails}>
-          <Text style={styles.infoTimestamp}>
-            Updated: {lastUpdated.toLocaleTimeString()}
-          </Text>
-          <Text style={styles.stationCount}>
-            {stations.length} monitoring stations
-          </Text>
-        </View>
-      )}
-    </LinearGradient>
-  );
-
   const UpdateNotification = () => {
     if (!showNotification || !showAQIData) return null;
     
@@ -373,35 +326,6 @@ export default function SimpleGoogleMap({
     );
   };
 
-  const Legend = () => (
-    <View style={styles.legend}>
-      <LinearGradient
-        colors={['#1E293B', '#334155']}
-        style={styles.legendContainer}
-      >
-        <Text style={styles.legendTitle}>AQI Scale</Text>
-        <View style={styles.legendItems}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#10B981' }]} />
-            <Text style={styles.legendText}>Good</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#F59E0B' }]} />
-            <Text style={styles.legendText}>Moderate</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#F97316' }]} />
-            <Text style={styles.legendText}>Unhealthy</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#EF4444' }]} />
-            <Text style={styles.legendText}>Very Unhealthy</Text>
-          </View>
-        </View>
-      </LinearGradient>
-    </View>
-  );
-
   return (
     <View style={styles.container}>
       <WebView
@@ -415,6 +339,16 @@ export default function SimpleGoogleMap({
         bounces={false}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        onMessage={(event) => {
+          try {
+            const message = JSON.parse(event.nativeEvent.data);
+            if (message.type === 'markerClick' && onMarkerClick) {
+              onMarkerClick(message.station);
+            }
+          } catch (error) {
+            console.log('Error parsing WebView message:', error);
+          }
+        }}
         onError={(error) => {
           console.log('WebView error:', error.nativeEvent);
         }}
@@ -427,9 +361,6 @@ export default function SimpleGoogleMap({
       />
       
       <UpdateNotification />
-      <MapControls />
-      <MapInfo />
-      {showAQIData && <Legend />}
     </View>
   );
 }
@@ -444,7 +375,7 @@ const styles = StyleSheet.create({
   },
   mapControls: {
     position: 'absolute',
-    top: 60,
+    top: 80,
     right: 20,
     gap: 8,
   },
@@ -464,54 +395,11 @@ const styles = StyleSheet.create({
   loadingButton: {
     backgroundColor: '#475569',
   },
-  mapInfo: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 80,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  infoTitle: {
-    color: '#E2E8F0',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  infoText: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  infoDetails: {
-    marginTop: 4,
-    gap: 2,
-  },
-  infoTimestamp: {
-    color: '#7C3AED',
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  stationCount: {
-    color: '#94A3B8',
-    fontSize: 10,
-  },
   notification: {
     position: 'absolute',
-    top: 20,
+    top: 80,
     left: 20,
-    right: 20,
+    right: 70,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -531,44 +419,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-  },
-  legend: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-  },
-  legendContainer: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  legendTitle: {
-    color: '#E2E8F0',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  legendItems: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    gap: 8,
-  },
-  legendItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  legendText: {
-    color: '#94A3B8',
-    fontSize: 10,
-    textAlign: 'center',
   },
 });
