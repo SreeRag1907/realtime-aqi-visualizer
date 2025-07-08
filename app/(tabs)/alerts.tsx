@@ -6,13 +6,17 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Settings, Wind, Heart, Zap, MapPin, AlertTriangle, Shield, Clock } from 'lucide-react-native';
+import { Bell, Settings, Wind, Heart, Zap, MapPin, AlertTriangle, Shield, Clock, LogOut, User } from 'lucide-react-native';
 import { useNotifications } from '@/context/NotificationContext';
+import { useAuth } from '@/context/AuthContext';
+import { router } from 'expo-router';
 
 export default function AlertsScreen() {
   const { notifications, unreadCount } = useNotifications();
+  const { user, logout } = useAuth();
   
   const [notificationSettings, setNotificationSettings] = useState({
     aqiSpikes: true,
@@ -128,6 +132,24 @@ export default function AlertsScreen() {
     </LinearGradient>
   );
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/auth');
+          }
+        },
+      ]
+    );
+  };
+
   const recentAlerts = notifications.slice(0, 3);
 
   return (
@@ -172,6 +194,36 @@ export default function AlertsScreen() {
       </LinearGradient>
 
       <View style={styles.content}>
+        {/* User Profile Section */}
+        {user && (
+          <View style={styles.userSection}>
+            <LinearGradient
+              colors={['#1E293B', '#334155']}
+              style={styles.userCard}
+            >
+              <View style={styles.userInfo}>
+                <LinearGradient
+                  colors={['#7C3AED', '#3B82F6']}
+                  style={styles.userAvatar}
+                >
+                  <User size={24} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.userDetails}>
+                  <Text style={styles.userName}>{user.name}</Text>
+                  <Text style={styles.userEmail}>{user.email}</Text>
+                  {user.role && <Text style={styles.userRole}>{user.role}</Text>}
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <LogOut size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        )}
+
         {/* Recent Alerts */}
         {recentAlerts.length > 0 && (
           <View style={styles.recentSection}>
@@ -441,5 +493,53 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  userSection: {
+    marginBottom: 24,
+  },
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    color: '#E2E8F0',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  userEmail: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  userRole: {
+    color: '#7C3AED',
+    fontSize: 10,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+  },
+  logoutButton: {
+    padding: 8,
   },
 });
