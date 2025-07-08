@@ -131,8 +131,8 @@ export default function AuthScreen() {
               >
                 <Satellite size={40} color="#FFFFFF" />
               </LinearGradient>
-              <Text style={styles.appName}>AirWatch</Text>
-              <Text style={styles.subtitle}>ISRO Satellite Air Quality Monitor</Text>
+              <Text style={styles.appName}>VayuDrishti</Text>
+              <Text style={styles.subtitle}>Swasth Jeevan ki Shrishti!</Text>
             </View>
 
             {/* Auth Form */}
@@ -146,8 +146,8 @@ export default function AuthScreen() {
                 </Text>
                 <Text style={styles.formSubtitle}>
                   {isLogin 
-                    ? 'Sign in to monitor air quality' 
-                    : 'Join the air quality monitoring network'
+                    ? 'Sign in to VayuDrishti for clean air insights' 
+                    : 'Join VayuDrishti for healthier living'
                   }
                 </Text>
 
@@ -281,9 +281,9 @@ export default function AuthScreen() {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to VayuDrishti's Terms of Service and Privacy Policy
               </Text>
-              <Text style={styles.poweredBy}>Powered by ISRO Technology</Text>
+              <Text style={styles.poweredBy}>Powered by ISRO Satellite Technology</Text>
             </View>
           </Animated.View>
         </ScrollView>

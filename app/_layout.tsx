@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
-import FloatingNotification from '@/components/FloatingNotification';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -21,7 +20,6 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
           <StatusBar style="light" backgroundColor="#0B1426" />
-          <FloatingNotification />
         </NotificationProvider>
       </AuthProvider>
     </GestureHandlerRootView>
