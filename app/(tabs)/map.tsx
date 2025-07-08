@@ -26,7 +26,20 @@ export default function MapScreen() {
 
   const loadDataStats = async () => {
     try {
+      console.log('Loading AQI data stats...');
       const stations = await aqiDataService.fetchRealTimeAQI();
+      
+      console.log(`Loaded ${stations.length} AQI stations`);
+      
+      // Log data sources
+      const sources = {
+        waqi: stations.filter(s => s.id.startsWith('waqi-')).length,
+        dataGov: stations.filter(s => s.id.startsWith('datagov-')).length,
+        openWeather: stations.filter(s => s.id.startsWith('ow-')).length,
+        mock: stations.filter(s => s.id.startsWith('rural-')).length,
+      };
+      
+      console.log('Data sources:', sources);
       
       setDataStats({
         totalStations: stations.length,
@@ -72,6 +85,9 @@ export default function MapScreen() {
             <Text style={styles.headerSubtitle}>
               {dataStats.totalStations} locations • Updated {dataStats.lastUpdate.toLocaleTimeString()}
             </Text>
+            <Text style={styles.dataQuality}>
+              Live data from WAQI, Indian Government & OpenWeather
+            </Text>
           </View>
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
@@ -102,7 +118,14 @@ export default function MapScreen() {
             <View style={styles.locationHeader}>
               <View style={styles.locationTitleContainer}>
                 <MapPin size={20} color="#7C3AED" />
-                <Text style={styles.locationTitle}>{selectedLocation.name}</Text>
+                <View>
+                  <Text style={styles.locationTitle}>{selectedLocation.name}</Text>
+                  <Text style={styles.dataSource}>
+                    {selectedLocation.id.startsWith('waqi-') ? '🌍 WAQI Global Network' :
+                     selectedLocation.id.startsWith('datagov-') ? '🇮🇳 Indian Government' :
+                     selectedLocation.id.startsWith('ow-') ? '🌤️ OpenWeather' : '📍 Local Data'}
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity 
                 onPress={() => setSelectedLocation(null)}
@@ -122,21 +145,58 @@ export default function MapScreen() {
                 <Text style={[styles.aqiStatus, { color: getAQIColor(selectedLocation.aqi) }]}>
                   {getAQIStatus(selectedLocation.aqi)}
                 </Text>
+                <Text style={styles.lastUpdated}>
+                  Updated: {new Date(selectedLocation.lastUpdated).toLocaleTimeString()}
+                </Text>
               </View>
-              
-              {/* Pollutant Details */}
-              <View style={styles.pollutantMini}>
-                <View style={styles.pollutantItem}>
+            </View>
+            
+            {/* Detailed Pollutant Grid */}
+            <View style={styles.pollutantGrid}>
+              <View style={styles.pollutantRow}>
+                <View style={styles.pollutantCard}>
                   <Text style={styles.pollutantLabel}>PM2.5</Text>
-                  <Text style={styles.pollutantValue}>{selectedLocation.pm25.toFixed(1)} μg/m³</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.pm25 > 60 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.pm25.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>μg/m³</Text>
                 </View>
-                <View style={styles.pollutantItem}>
+                <View style={styles.pollutantCard}>
                   <Text style={styles.pollutantLabel}>PM10</Text>
-                  <Text style={styles.pollutantValue}>{selectedLocation.pm10.toFixed(1)} μg/m³</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.pm10 > 100 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.pm10.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>μg/m³</Text>
                 </View>
-                <View style={styles.pollutantItem}>
+                <View style={styles.pollutantCard}>
                   <Text style={styles.pollutantLabel}>NO₂</Text>
-                  <Text style={styles.pollutantValue}>{selectedLocation.no2.toFixed(1)} μg/m³</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.no2 > 80 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.no2.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>μg/m³</Text>
+                </View>
+              </View>
+              <View style={styles.pollutantRow}>
+                <View style={styles.pollutantCard}>
+                  <Text style={styles.pollutantLabel}>SO₂</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.so2 > 80 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.so2.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>μg/m³</Text>
+                </View>
+                <View style={styles.pollutantCard}>
+                  <Text style={styles.pollutantLabel}>CO</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.co > 4 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.co.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>mg/m³</Text>
+                </View>
+                <View style={styles.pollutantCard}>
+                  <Text style={styles.pollutantLabel}>O₃</Text>
+                  <Text style={[styles.pollutantValue, { color: selectedLocation.o3 > 120 ? '#EF4444' : '#10B981' }]}>
+                    {selectedLocation.o3.toFixed(1)}
+                  </Text>
+                  <Text style={styles.pollutantUnit}>μg/m³</Text>
                 </View>
               </View>
             </View>
@@ -171,6 +231,12 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: '#94A3B8',
     fontSize: 12,
+  },
+  dataQuality: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
   },
   liveIndicator: {
     flexDirection: 'row',
@@ -230,14 +296,20 @@ const styles = StyleSheet.create({
   },
   locationTitleContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
+    gap: 8,
   },
   locationTitle: {
     color: '#1F2937',
     fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 8,
+  },
+  dataSource: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   closeButton: {
     width: 32,
@@ -253,12 +325,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   aqiSummary: {
-    flexDirection: 'row',
-    gap: 20,
+    marginBottom: 20,
   },
   aqiMain: {
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 16,
   },
   aqiLabel: {
     color: '#6B7280',
@@ -273,28 +344,44 @@ const styles = StyleSheet.create({
   aqiStatus: {
     fontSize: 14,
     fontWeight: '600',
+    marginBottom: 4,
   },
-  pollutantMini: {
-    flex: 1,
-    gap: 8,
+  lastUpdated: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    fontStyle: 'italic',
   },
-  pollutantItem: {
+  pollutantGrid: {
+    gap: 12,
+  },
+  pollutantRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 12,
+  },
+  pollutantCard: {
+    flex: 1,
     backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   pollutantLabel: {
     color: '#6B7280',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
+    marginBottom: 4,
   },
   pollutantValue: {
-    color: '#1F2937',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  pollutantUnit: {
+    color: '#9CA3AF',
+    fontSize: 9,
+    fontWeight: '400',
   },
 });

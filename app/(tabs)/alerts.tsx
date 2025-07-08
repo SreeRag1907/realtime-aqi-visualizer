@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Bell, TriangleAlert as AlertTriangle, Shield, MapPin, Clock, Settings, Zap, Wind, Heart, Users, Satellite, Target } from 'lucide-react-native';
+import AQIStatusDashboard from '@/components/AQIStatusDashboard';
 
 export default function AlertsScreen() {
   const [notifications, setNotifications] = useState({
